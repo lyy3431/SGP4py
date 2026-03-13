@@ -496,8 +496,11 @@ def main():
 
     # 检查是否使用 HPOP 模式
     use_hpop = "--hpop" in sys.argv
+    show_progress = "--progress" in sys.argv or "-p" in sys.argv
     if use_hpop:
         sys.argv.remove("--hpop")
+    if show_progress:
+        sys.argv.remove("--progress") if "--progress" in sys.argv else sys.argv.remove("-p")
 
     if len(sys.argv) > 1:
         tle_file = sys.argv[1]
@@ -517,7 +520,11 @@ def main():
         try:
             from hpop import SpacecraftState, compare_sgp4_hpop
             spacecraft = SpacecraftState(mass=420000.0, area_drag=1000.0, area_srp=2500.0)
-            print("模式：HPOP 高精度外推 (SGP4 作为初始条件)\n")
+            print("模式：HPOP 高精度外推 (SGP4 作为初始条件)")
+            if show_progress:
+                print("进度条：已启用\n")
+            else:
+                print()
         except ImportError:
             print("警告：hpop 模块不可用，回退到 SGP4 模式\n")
             use_hpop = False
@@ -547,7 +554,7 @@ def main():
 
         if use_hpop:
             from hpop import hprop_from_tle
-            pv = hprop_from_tle(tle, now, spacecraft)
+            pv = hprop_from_tle(tle, now, spacecraft, show_progress)
         else:
             pv = propagate_to_datetime(tle, now)
         print_orbit_info(tle, pv, now)
@@ -560,7 +567,7 @@ def main():
             target = now + timedelta(minutes=m)
             if use_hpop:
                 from hpop import hprop_from_tle
-                pv = hprop_from_tle(tle, target, spacecraft)
+                pv = hprop_from_tle(tle, target, spacecraft, show_progress)
             else:
                 pv = propagate_to_datetime(tle, target)
             lat, lon, alt = get_lat_lon_alt(pv, gmst_from_datetime(target))

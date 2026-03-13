@@ -30,13 +30,10 @@ python sgp4.py <tle_file>
 ### HPOP 模式（高精度）
 
 ```bash
-python sgp4.py --hpop [tle_file]
-```
-
-或直接运行 HPOP 模块:
-
-```bash
-python hpop.py
+python sgp4.py --hpop [tle_file]       # 使用 HPOP 高精度外推
+python sgp4.py --hpop --progress       # 显示进度条
+python hpop.py                         # 直接运行 HPOP 模块
+python hpop.py --progress              # 显示进度条 (或 -p)
 ```
 
 ## 输出示例

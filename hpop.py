@@ -14,6 +14,7 @@ High Precision Orbit Propagator
 """
 
 import math
+import sys
 from datetime import datetime, timedelta
 from typing import Tuple, Optional, Callable
 from dataclasses import dataclass
@@ -45,6 +46,35 @@ C_R = 1.2              # 辐射压系数 (典型值)
 
 # 相对论参数
 C_LIGHT = 299792.458   # km/s - 光速
+
+
+class ProgressBar:
+    """简单的文本进度条"""
+
+    def __init__(self, total: float, prefix: str = "Progress", length: int = 40):
+        self.total = total
+        self.prefix = prefix
+        self.length = length
+        self.current = 0.0
+        self._show(0.0)
+
+    def _show(self, value: float):
+        """显示进度条"""
+        percent = min(100.0, max(0.0, value / self.total * 100))
+        filled = int(self.length * value / self.total)
+        bar = "=" * filled + "-" * (self.length - filled)
+        sys.stdout.write(f"\r{self.prefix}: [{bar}] {percent:.1f}%")
+        sys.stdout.flush()
+
+    def update(self, value: float):
+        """更新进度"""
+        self.current = value
+        self._show(value)
+
+    def close(self):
+        """完成进度条"""
+        self._show(self.total)
+        print()  # 换行
 
 
 @dataclass
@@ -468,12 +498,13 @@ class HPOPPropagator:
 
         return ((x5, y5, z5, vx5, vy5, vz5), err)
 
-    def propagate(self, target_time: datetime) -> PositionVelocity:
+    def propagate(self, target_time: datetime, show_progress: bool = False) -> PositionVelocity:
         """
         外推到目标时间
 
         参数:
             target_time: 目标时间
+            show_progress: 是否显示进度条
 
         返回:
             PositionVelocity: ECI 坐标系中的位置和速度
@@ -500,6 +531,12 @@ class HPOPPropagator:
         # 自适应步长 RK45
         tol = 1e-8  # 位置误差容限 (km)
 
+        # 初始化进度条
+        progress = None
+        if show_progress:
+            progress = ProgressBar(target_t, prefix="HPOP 积分")
+
+        step_count = 0
         while t < target_t:
             # 确保不超过目标时间
             if t + dt > target_t:
@@ -517,6 +554,11 @@ class HPOPPropagator:
                 x, y, z = x_new, y_new, z_new
                 vx, vy, vz = vx_new, vy_new, vz_new
                 t += abs(dt)
+                step_count += 1
+
+                # 更新进度条
+                if progress:
+                    progress.update(t)
 
                 # 增大步长
                 if err > 0:
@@ -527,6 +569,11 @@ class HPOPPropagator:
             else:
                 # 拒绝步长，减小步长重试
                 dt *= max(0.1, (tol / err) ** 0.25)
+
+        # 关闭进度条
+        if progress:
+            progress.close()
+            print(f"  积分步数：{step_count}, 平均步长：{t/step_count:.2f} 秒")
 
         return PositionVelocity(x, y, z, vx, vy, vz)
 
@@ -553,7 +600,8 @@ class HPOPPropagator:
 
 
 def hprop_from_tle(tle: TLE, target_time: datetime,
-                   spacecraft: Optional[SpacecraftState] = None) -> PositionVelocity:
+                   spacecraft: Optional[SpacecraftState] = None,
+                   show_progress: bool = False) -> PositionVelocity:
     """
     从 TLE 开始使用 HPOP 外推到目标时间
 
@@ -561,6 +609,7 @@ def hprop_from_tle(tle: TLE, target_time: datetime,
         tle: TLE 轨道根数
         target_time: 目标时间
         spacecraft: 航天器物理参数
+        show_progress: 是否显示进度条
 
     返回:
         PositionVelocity: ECI 坐标系中的位置和速度
@@ -572,7 +621,7 @@ def hprop_from_tle(tle: TLE, target_time: datetime,
     prop = HPOPPropagator(initial_state, tle.epoch, spacecraft)
 
     # 外推到目标时间
-    return prop.propagate(target_time)
+    return prop.propagate(target_time, show_progress)
 
 
 def hprop_from_datetime(tle: TLE, target_time: datetime,
@@ -592,7 +641,8 @@ def hprop_from_datetime(tle: TLE, target_time: datetime,
 
 
 def compare_sgp4_hpop(tle: TLE, target_time: datetime,
-                      spacecraft: Optional[SpacecraftState] = None) -> dict:
+                      spacecraft: Optional[SpacecraftState] = None,
+                      show_progress: bool = False) -> dict:
     """
     比较 SGP4 和 HPOP 的计算结果
 
@@ -600,6 +650,7 @@ def compare_sgp4_hpop(tle: TLE, target_time: datetime,
         tle: TLE 轨道根数
         target_time: 目标时间
         spacecraft: 航天器物理参数
+        show_progress: 是否显示进度条
 
     返回:
         包含 SGP4 和 HPOP 结果及差异的字典
@@ -608,7 +659,7 @@ def compare_sgp4_hpop(tle: TLE, target_time: datetime,
     sgp4_result = propagate_to_datetime(tle, target_time)
 
     # HPOP 结果
-    hpop_result = hprop_from_tle(tle, target_time, spacecraft)
+    hpop_result = hprop_from_tle(tle, target_time, spacecraft, show_progress)
 
     # 计算差异
     dr = math.sqrt((hpop_result.x - sgp4_result.x)**2 +
@@ -629,9 +680,10 @@ def compare_sgp4_hpop(tle: TLE, target_time: datetime,
 
 
 def print_comparison(tle: TLE, target_time: datetime,
-                     spacecraft: Optional[SpacecraftState] = None):
+                     spacecraft: Optional[SpacecraftState] = None,
+                     show_progress: bool = False):
     """打印 SGP4 和 HPOP 的对比结果"""
-    result = compare_sgp4_hpop(tle, target_time, spacecraft)
+    result = compare_sgp4_hpop(tle, target_time, spacecraft, show_progress)
 
     print(f"\n{'='*60}")
     print(f"时间：{target_time.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -665,6 +717,9 @@ def main():
     else:
         tle_file = "ISS.tle"
 
+    # 检查是否显示进度条
+    show_progress = "--progress" in sys.argv or "-p" in sys.argv
+
     from sgp4 import load_tle_file
     tles = load_tle_file(tle_file)
 
@@ -690,7 +745,7 @@ def main():
         # 当前时刻对比
         now = datetime.now()
         print(">>> SGP4 vs HPOP 对比 (当前时刻)")
-        print_comparison(tle, now, spacecraft)
+        print_comparison(tle, now, spacecraft, show_progress)
 
         # 未来 24 小时预报对比
         print("\n>>> 未来 24 小时 SGP4 vs HPOP 位置差异 (每 1 小时):")
@@ -699,7 +754,7 @@ def main():
 
         for h in range(0, 25, 1):
             target = now + timedelta(hours=h)
-            result = compare_sgp4_hpop(tle, target, spacecraft)
+            result = compare_sgp4_hpop(tle, target, spacecraft, show_progress)
             print(f"+{h:3.0f}h  | {result['position_diff_km']*1000:>10.1f} m      | {result['velocity_diff_kms']*1000:>10.2f} m/s")
 
         print()
