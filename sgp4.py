@@ -514,7 +514,7 @@ def main():
     parser.add_argument('-p', '--progress', action='store_true',
                         help='显示进度条 (仅 HPOP 模式)')
     parser.add_argument('-m', '--minutes', type=float, default=1.0,
-                        help='外推时间 (分钟，从当前时刻起算)，默认：1 分钟')
+                        help='外推时间 (分钟，从 TLE 历元起算)，默认：1 分钟')
 
     args = parser.parse_args()
 
@@ -522,7 +522,7 @@ def main():
     print("SGP4/HPOP 轨道外推计算程序")
     print("=" * 60)
     print(f"TLE 文件：{args.tle_file}")
-    print(f"外推时间：当前时刻 + {args.minutes:.1f} 分钟")
+    print(f"外推时间：从 TLE 历元起算 {args.minutes:.1f} 分钟")
     print(f"模式：{'HPOP 高精度' if args.hpop else 'SGP4 快速'}")
     if args.hpop and args.progress:
         print(f"进度条：已启用")
@@ -560,16 +560,10 @@ def main():
         pv = sgp4_propagate(tle, 0.0)
         print_orbit_info(tle, pv, tle.epoch)
 
-        # 当前时刻
-        now = datetime.now()
-        delta_from_epoch = (now - tle.epoch).total_seconds() / 60.0
-        print(f">>> 当前时刻 ({now.strftime('%Y-%m-%d %H:%M:%S')})")
-        print(f"    距离 TLE 历元：{delta_from_epoch:.1f} 分钟 ({delta_from_epoch/1440:.1f} 天)")
-
-        # 目标时刻
-        target = now + timedelta(minutes=args.minutes)
+        # 外推目标时刻（从 TLE 历元起算）
+        target = tle.epoch + timedelta(minutes=args.minutes)
         print(f"\n>>> 外推目标时刻 ({target.strftime('%Y-%m-%d %H:%M:%S')})")
-        print(f"    距离当前时刻：{args.minutes:.1f} 分钟")
+        print(f"    从 TLE 历元起算：{args.minutes:.1f} 分钟")
 
         if args.hpop:
             from hpop import hprop_from_tle
@@ -578,16 +572,16 @@ def main():
             pv = propagate_to_datetime(tle, target)
         print_orbit_info(tle, pv, target)
 
-        # 轨道预报（从当前时刻到目标时刻）
+        # 轨道预报（从 TLE 历元到目标时刻）
         steps = int(args.minutes / 5) if args.minutes <= 60 else int(args.minutes / 10)
         if steps < 5:
             steps = 5
         interval = args.minutes / steps
 
-        print(f">>> 轨道预报 (从当前时刻到目标时刻，每 {interval:.1f} 分钟):")
+        print(f">>> 轨道预报 (从 TLE 历元到目标时刻，每 {interval:.1f} 分钟):")
         for i in range(steps + 1):
             t = i * interval
-            calc_time = now + timedelta(minutes=t)
+            calc_time = tle.epoch + timedelta(minutes=t)
             if args.hpop:
                 from hpop import hprop_from_tle
                 pv = hprop_from_tle(tle, calc_time, spacecraft, False)

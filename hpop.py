@@ -730,7 +730,7 @@ def main():
     parser.add_argument('-p', '--progress', action='store_true',
                         help='显示进度条')
     parser.add_argument('-m', '--minutes', type=float, default=1.0,
-                        help='外推时间 (分钟，从当前时刻起算)，默认：1 分钟')
+                        help='外推时间 (分钟，从 TLE 历元起算)，默认：1 分钟')
 
     args = parser.parse_args()
 
@@ -738,7 +738,7 @@ def main():
     print("HPOP 高精度轨道外推计算程序")
     print("=" * 60)
     print(f"TLE 文件：{args.tle_file}")
-    print(f"外推时间：当前时刻 + {args.minutes:.1f} 分钟")
+    print(f"外推时间：从 TLE 历元起算 {args.minutes:.1f} 分钟")
     print(f"进度条：{'已启用' if args.progress else '禁用'}")
     print("=" * 60)
 
@@ -763,70 +763,54 @@ def main():
         print(f"TLE 历元：{tle.epoch}")
         print()
 
-        # 当前时刻
-        now = datetime.now()
-        print(f">>> 当前时刻 ({now.strftime('%Y-%m-%d %H:%M:%S')})")
+        # TLE 历元时刻
+        print(f">>> TLE 历元时刻的轨道状态:")
+        pv_epoch = sgp4_propagate(tle, 0.0)
+        print_orbit_info(tle, pv_epoch, tle.epoch)
 
-        # SGP4 结果
-        sgp4_result = propagate_to_datetime(tle, now)
-        print("\n--- SGP4 结果 (当前时刻) ---")
-        print_orbit_info(tle, sgp4_result, now)
+        # 外推目标时刻（从 TLE 历元起算）
+        target = tle.epoch + timedelta(minutes=args.minutes)
+        print(f"\n>>> 外推目标时刻 ({target.strftime('%Y-%m-%d %H:%M:%S')})")
+        print(f"    从 TLE 历元起算：{args.minutes:.1f} 分钟")
 
-        # HPOP 结果 (当前时刻)
-        print("\n--- HPOP 结果 (当前时刻) ---")
-        hpop_result = hprop_from_tle(tle, now, spacecraft, args.progress)
-        print_orbit_info(tle, hpop_result, now)
+        # SGP4 外推
+        print("\n--- SGP4 外推结果 ---")
+        sgp4_result = propagate_to_datetime(tle, target)
+        print_orbit_info(tle, sgp4_result, target)
+
+        # HPOP 外推
+        print("\n--- HPOP 外推结果 ---")
+        hpop_result = hprop_from_tle(tle, target, spacecraft, args.progress)
+        print_orbit_info(tle, hpop_result, target)
 
         # 计算差异
         dr = math.sqrt((hpop_result.x - sgp4_result.x)**2 +
                        (hpop_result.y - sgp4_result.y)**2 +
                        (hpop_result.z - sgp4_result.z)**2)
-        print(f"\n--- 当前时刻差异 ---")
-        print(f"位置差异：{dr:.4f} km ({dr*1000:.1f} m)")
+        dv = math.sqrt((hpop_result.vx - sgp4_result.vx)**2 +
+                       (hpop_result.vy - sgp4_result.vy)**2 +
+                       (hpop_result.vz - sgp4_result.vz)**2)
+        print(f"\n--- 位置/速度差异 ---")
+        print(f"距离差异：{dr:.4f} km ({dr*1000:.1f} m)")
+        print(f"速度差异：{dv:.6f} km/s ({dv*1000:.3f} m/s)")
 
-        # 目标时刻
-        target = now + timedelta(minutes=args.minutes)
-        print(f"\n>>> 外推目标时刻 ({target.strftime('%Y-%m-%d %H:%M:%S')})")
-        print(f"    距离当前时刻：{args.minutes:.1f} 分钟")
-
-        # SGP4 外推
-        print("\n--- SGP4 外推结果 ---")
-        sgp4_target = propagate_to_datetime(tle, target)
-        print_orbit_info(tle, sgp4_target, target)
-
-        # HPOP 外推
-        print("\n--- HPOP 外推结果 ---")
-        hpop_target = hprop_from_tle(tle, target, spacecraft, args.progress)
-        print_orbit_info(tle, hpop_target, target)
-
-        # 计算差异
-        dr_target = math.sqrt((hpop_target.x - sgp4_target.x)**2 +
-                              (hpop_target.y - sgp4_target.y)**2 +
-                              (hpop_target.z - sgp4_target.z)**2)
-        dv_target = math.sqrt((hpop_target.vx - sgp4_target.vx)**2 +
-                              (hpop_target.vy - sgp4_target.vy)**2 +
-                              (hpop_target.vz - sgp4_target.vz)**2)
-        print(f"\n--- 目标时刻差异 ---")
-        print(f"位置差异：{dr_target:.4f} km ({dr_target*1000:.1f} m)")
-        print(f"速度差异：{dv_target:.6f} km/s ({dv_target*1000:.3f} m/s)")
-
-        # 轨道预报
+        # 轨道预报（从 TLE 历元到目标时刻）
         steps = int(args.minutes / 5) if args.minutes <= 60 else int(args.minutes / 10)
         if steps < 5:
             steps = 5
         interval = args.minutes / steps
 
-        print(f"\n>>> HPOP 轨道预报 (从当前时刻到目标时刻，每 {interval:.1f} 分钟):")
+        print(f"\n>>> HPOP 轨道预报 (从 TLE 历元到目标时刻，每 {interval:.1f} 分钟):")
         print(f"{'时间':<8} | {'历元':<12} | {'纬度':<10} | {'经度':<10} | {'高度 (km)':<10} | {'速度 (km/s)':<10}")
-        print("-" * 70)
+        print("-" * 75)
 
         for i in range(steps + 1):
             t = i * interval
-            calc_time = now + timedelta(minutes=t)
+            calc_time = tle.epoch + timedelta(minutes=t)
             pv = hprop_from_tle(tle, calc_time, spacecraft, False)
             lat, lon, alt = get_lat_lon_alt(pv, gmst_from_datetime(calc_time))
             marker = " <-- 目标" if i == steps else ""
-            print(f"+{t:5.1f}min | {calc_time.strftime('%H:%M:%S')} | "
+            print(f"  +{t:5.1f}min | {calc_time.strftime('%H:%M:%S')} | "
                   f"Lat={lat:7.3f}° | Lon={lon:8.3f}° | {alt:8.1f} | {pv.v:8.3f}{marker}")
 
         print()

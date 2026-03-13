@@ -15,7 +15,7 @@ SGP4/HPOP 轨道外推算法的 Python 实现，用于根据 TLE 数据计算卫
 
 ### SGP4 模式（快速）
 
-运行主程序（默认使用 ISS.tle，外推 1 分钟）:
+运行主程序（默认使用 ISS.tle，从 TLE 历元外推 1 分钟）:
 
 ```bash
 python sgp4.py
@@ -24,20 +24,20 @@ python sgp4.py
 指定 TLE 文件和外推时间:
 
 ```bash
-python sgp4.py <tle_file>              # 指定 TLE 文件，外推 1 分钟
-python sgp4.py -m 30                   # 外推 30 分钟
-python sgp4.py --hpop -m 60            # HPOP 模式外推 1 小时
+python sgp4.py <tle_file>              # 指定 TLE 文件，从 TLE 历元外推 1 分钟
+python sgp4.py -m 30                   # 从 TLE 历元外推 30 分钟
+python sgp4.py --hpop -m 60            # HPOP 模式从 TLE 历元外推 1 小时
 python sgp4.py --hpop -m 30 -p         # HPOP 模式 + 进度条
 ```
 
 ### HPOP 模式（高精度）
 
 ```bash
-python sgp4.py --hpop                  # 使用 HPOP 高精度外推，默认 1 分钟
-python sgp4.py --hpop -m 30            # 外推 30 分钟
+python sgp4.py --hpop                  # 使用 HPOP 高精度外推，从 TLE 历元外推 1 分钟
+python sgp4.py --hpop -m 30            # 从 TLE 历元外推 30 分钟
 python sgp4.py --hpop -p               # 显示进度条
 python hpop.py                         # 直接运行 HPOP 模块
-python hpop.py -m 60                   # 外推 60 分钟
+python hpop.py -m 60                   # 从 TLE 历元外推 60 分钟
 python hpop.py -m 60 -p                # 显示进度条
 ```
 
@@ -47,7 +47,7 @@ python hpop.py -m 60 -p                # 显示进度条
 -h, --help            显示帮助信息
 --hpop                使用 HPOP 高精度外推模式 (默认：SGP4)
 -p, --progress        显示进度条 (仅 HPOP 模式)
--m, --minutes MINUTES  外推时间 (分钟，从当前时刻起算)，默认：1 分钟
+-m, --minutes MINUTES  外推时间 (分钟，从 TLE 历元起算)，默认：1 分钟
 ```
 
 ## 输出示例
