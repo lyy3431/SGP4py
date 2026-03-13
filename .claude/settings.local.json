@@ -10,7 +10,11 @@
       "Read(//d/CAItest/**)",
       "Bash(python hpop.py)",
       "Bash(cd D:/CStudy/AItest/gpt4test && python -c \"from sgp4 import TLE, sgp4_propagate; print\\('SGP4 OK'\\)\")",
-      "Bash(cd D:/CStudy/AItest/gpt4test && python -c \"from hpop import HPOPPropagator, SpacecraftState; print\\('HPOP import OK'\\)\")"
+      "Bash(cd D:/CStudy/AItest/gpt4test && python -c \"from hpop import HPOPPropagator, SpacecraftState; print\\('HPOP import OK'\\)\")",
+      "Bash(cd D:/CStudy/AItest/gpt4test && python sgp4.py --help)",
+      "Bash(cd D:/CStudy/AItest/gpt4test && python hpop.py --help)",
+      "Bash(cd D:/CStudy/AItest/gpt4test && timeout 60 python sgp4.py -m 2 2>&1)",
+      "Bash(cd D:/CStudy/AItest/gpt4test && timeout 120 python sgp4.py --hpop -m 5 -p 2>&1)"
     ]
   }
 }

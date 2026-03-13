@@ -490,46 +490,60 @@ def print_orbit_info(tle: TLE, pv: PositionVelocity, timestamp: datetime):
 def main():
     """主程序"""
     import sys
+    import argparse
+
+    # 解析命令行参数
+    parser = argparse.ArgumentParser(
+        description='SGP4/HPOP 轨道外推计算程序 - 根据 TLE 数据计算卫星轨道位置和速度',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog='''
+示例:
+  python sgp4.py                    # 使用 ISS.tle，外推 10 分钟后
+  python sgp4.py NOAA19.tle         # 指定 TLE 文件
+  python sgp4.py --hpop             # 使用 HPOP 高精度模式
+  python sgp4.py --hpop -p          # HPOP 模式 + 进度条
+  python sgp4.py -m 60              # 外推 60 分钟后的轨道
+  python sgp4.py --hpop -m 120 -p   # HPOP 外推 2 小时，显示进度条
+'''
+    )
+
+    parser.add_argument('tle_file', nargs='?', default='ISS.tle',
+                        help='TLE 文件路径 (默认：ISS.tle)')
+    parser.add_argument('--hpop', action='store_true',
+                        help='使用 HPOP 高精度外推模式 (默认：SGP4)')
+    parser.add_argument('-p', '--progress', action='store_true',
+                        help='显示进度条 (仅 HPOP 模式)')
+    parser.add_argument('-m', '--minutes', type=float, default=10.0,
+                        help='外推时间 (分钟，从当前时刻起算)，默认：10 分钟')
+
+    args = parser.parse_args()
+
     print("=" * 60)
-    print("SGP4 轨道外推计算程序")
+    print("SGP4/HPOP 轨道外推计算程序")
+    print("=" * 60)
+    print(f"TLE 文件：{args.tle_file}")
+    print(f"外推时间：当前时刻 + {args.minutes:.1f} 分钟")
+    print(f"模式：{'HPOP 高精度' if args.hpop else 'SGP4 快速'}")
+    if args.hpop and args.progress:
+        print(f"进度条：已启用")
     print("=" * 60)
 
-    # 检查是否使用 HPOP 模式
-    use_hpop = "--hpop" in sys.argv
-    show_progress = "--progress" in sys.argv or "-p" in sys.argv
-    if use_hpop:
-        sys.argv.remove("--hpop")
-    if show_progress:
-        sys.argv.remove("--progress") if "--progress" in sys.argv else sys.argv.remove("-p")
-
-    if len(sys.argv) > 1:
-        tle_file = sys.argv[1]
-    else:
-        tle_file = "ISS.tle"
-
-    tles = load_tle_file(tle_file)
+    tles = load_tle_file(args.tle_file)
 
     if not tles:
         print("未找到 TLE 数据!")
         return
 
-    print(f"已加载 {len(tles)} 个 TLE 目标\n")
+    print(f"\n已加载 {len(tles)} 个 TLE 目标\n")
 
     # 如果启用 HPOP，导入 hpop 模块
-    if use_hpop:
+    if args.hpop:
         try:
             from hpop import SpacecraftState, compare_sgp4_hpop
             spacecraft = SpacecraftState(mass=420000.0, area_drag=1000.0, area_srp=2500.0)
-            print("模式：HPOP 高精度外推 (SGP4 作为初始条件)")
-            if show_progress:
-                print("进度条：已启用\n")
-            else:
-                print()
         except ImportError:
             print("警告：hpop 模块不可用，回退到 SGP4 模式\n")
-            use_hpop = False
-    else:
-        print("模式：SGP4 快速外推\n")
+            args.hpop = False
 
     for tle in tles:
         print(f"目标：{tle.name}")
@@ -552,27 +566,37 @@ def main():
         print(f">>> 当前时刻 ({now.strftime('%Y-%m-%d %H:%M:%S')})")
         print(f"    距离 TLE 历元：{delta_from_epoch:.1f} 分钟 ({delta_from_epoch/1440:.1f} 天)")
 
-        if use_hpop:
-            from hpop import hprop_from_tle
-            pv = hprop_from_tle(tle, now, spacecraft, show_progress)
-        else:
-            pv = propagate_to_datetime(tle, now)
-        print_orbit_info(tle, pv, now)
+        # 目标时刻
+        target = now + timedelta(minutes=args.minutes)
+        print(f"\n>>> 外推目标时刻 ({target.strftime('%Y-%m-%d %H:%M:%S')})")
+        print(f"    距离当前时刻：{args.minutes:.1f} 分钟")
 
-        # 未来轨道预报
-        forecast_hours = 24 if not use_hpop else 6
-        interval = 15 if not use_hpop else 30
-        print(f">>> 未来 {forecast_hours} 小时轨道预报 (每 {interval} 分钟):")
-        for m in range(0, forecast_hours*60, interval):
-            target = now + timedelta(minutes=m)
-            if use_hpop:
+        if args.hpop:
+            from hpop import hprop_from_tle
+            pv = hprop_from_tle(tle, target, spacecraft, args.progress)
+        else:
+            pv = propagate_to_datetime(tle, target)
+        print_orbit_info(tle, pv, target)
+
+        # 轨道预报（从当前时刻到目标时刻）
+        steps = int(args.minutes / 5) if args.minutes <= 60 else int(args.minutes / 10)
+        if steps < 5:
+            steps = 5
+        interval = args.minutes / steps
+
+        print(f">>> 轨道预报 (从当前时刻到目标时刻，每 {interval:.1f} 分钟):")
+        for i in range(steps + 1):
+            t = i * interval
+            calc_time = now + timedelta(minutes=t)
+            if args.hpop:
                 from hpop import hprop_from_tle
-                pv = hprop_from_tle(tle, target, spacecraft, show_progress)
+                pv = hprop_from_tle(tle, calc_time, spacecraft, False)
             else:
-                pv = propagate_to_datetime(tle, target)
-            lat, lon, alt = get_lat_lon_alt(pv, gmst_from_datetime(target))
-            print(f"  +{m:4.0f}min | {target.strftime('%H:%M')} | "
-                  f"Lat={lat:7.3f}° Lon={lon:8.3f}° Alt={alt:7.1f}km | V={pv.v:.3f} km/s")
+                pv = propagate_to_datetime(tle, calc_time)
+            lat, lon, alt = get_lat_lon_alt(pv, gmst_from_datetime(calc_time))
+            marker = " <-- 目标" if i == steps else ""
+            print(f"  +{t:5.1f}min | {calc_time.strftime('%H:%M:%S')} | "
+                  f"Lat={lat:7.3f}° Lon={lon:8.3f}° Alt={alt:7.1f}km | V={pv.v:.3f} km/s{marker}")
 
         print()
 
