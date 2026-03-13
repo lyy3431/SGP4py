@@ -489,11 +489,16 @@ def print_orbit_info(tle: TLE, pv: PositionVelocity, timestamp: datetime):
 
 def main():
     """主程序"""
+    import sys
     print("=" * 60)
     print("SGP4 轨道外推计算程序")
     print("=" * 60)
 
-    import sys
+    # 检查是否使用 HPOP 模式
+    use_hpop = "--hpop" in sys.argv
+    if use_hpop:
+        sys.argv.remove("--hpop")
+
     if len(sys.argv) > 1:
         tle_file = sys.argv[1]
     else:
@@ -506,6 +511,18 @@ def main():
         return
 
     print(f"已加载 {len(tles)} 个 TLE 目标\n")
+
+    # 如果启用 HPOP，导入 hpop 模块
+    if use_hpop:
+        try:
+            from hpop import SpacecraftState, compare_sgp4_hpop
+            spacecraft = SpacecraftState(mass=420000.0, area_drag=1000.0, area_srp=2500.0)
+            print("模式：HPOP 高精度外推 (SGP4 作为初始条件)\n")
+        except ImportError:
+            print("警告：hpop 模块不可用，回退到 SGP4 模式\n")
+            use_hpop = False
+    else:
+        print("模式：SGP4 快速外推\n")
 
     for tle in tles:
         print(f"目标：{tle.name}")
@@ -527,14 +544,25 @@ def main():
         delta_from_epoch = (now - tle.epoch).total_seconds() / 60.0
         print(f">>> 当前时刻 ({now.strftime('%Y-%m-%d %H:%M:%S')})")
         print(f"    距离 TLE 历元：{delta_from_epoch:.1f} 分钟 ({delta_from_epoch/1440:.1f} 天)")
-        pv = propagate_to_datetime(tle, now)
+
+        if use_hpop:
+            from hpop import hprop_from_tle
+            pv = hprop_from_tle(tle, now, spacecraft)
+        else:
+            pv = propagate_to_datetime(tle, now)
         print_orbit_info(tle, pv, now)
 
         # 未来轨道预报
-        print(f">>> 未来 24 小时轨道预报 (每 15 分钟):")
-        for m in range(0, 24*60, 15):
+        forecast_hours = 24 if not use_hpop else 6
+        interval = 15 if not use_hpop else 30
+        print(f">>> 未来 {forecast_hours} 小时轨道预报 (每 {interval} 分钟):")
+        for m in range(0, forecast_hours*60, interval):
             target = now + timedelta(minutes=m)
-            pv = propagate_to_datetime(tle, target)
+            if use_hpop:
+                from hpop import hprop_from_tle
+                pv = hprop_from_tle(tle, target, spacecraft)
+            else:
+                pv = propagate_to_datetime(tle, target)
             lat, lon, alt = get_lat_lon_alt(pv, gmst_from_datetime(target))
             print(f"  +{m:4.0f}min | {target.strftime('%H:%M')} | "
                   f"Lat={lat:7.3f}° Lon={lon:8.3f}° Alt={alt:7.1f}km | V={pv.v:.3f} km/s")

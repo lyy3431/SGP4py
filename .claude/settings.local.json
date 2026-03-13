@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python sgp4.py)",
+      "Bash(python -c \"\nline = '1 25544U 98067A   23033.06078645  .00011490  00000+0  20646-3 0  9992'\nprint\\('line[18:32]:', repr\\(line[18:32]\\)\\)\nprint\\('len\\(line\\):', len\\(line\\)\\)\nfor i, c in enumerate\\(line\\):\n    print\\(f'{i:2d}: {c}'\\)\n\")",
+      "Bash(python -c \"\nepoch_str = '23033.06078645'\nprint\\('Full string:', epoch_str\\)\nprint\\('Year:', int\\(epoch_str[:2]\\)\\)\nprint\\('Day:', float\\(epoch_str\\)\\)  # 这是整个字符串！\nprint\\('Day correct:', float\\(epoch_str[2:]\\)\\)  # 应该是这样\n\")",
+      "Bash(git config:*)",
+      "Bash(git add:*)",
+      "WebSearch",
+      "Read(//d/CAItest/**)",
+      "Bash(python hpop.py)",
+      "Bash(cd D:/CStudy/AItest/gpt4test && python -c \"from sgp4 import TLE, sgp4_propagate; print\\('SGP4 OK'\\)\")",
+      "Bash(cd D:/CStudy/AItest/gpt4test && python -c \"from hpop import HPOPPropagator, SpacecraftState; print\\('HPOP import OK'\\)\")"
+    ]
+  }
+}
