@@ -513,8 +513,8 @@ def main():
                         help='使用 HPOP 高精度外推模式 (默认：SGP4)')
     parser.add_argument('-p', '--progress', action='store_true',
                         help='显示进度条 (仅 HPOP 模式)')
-    parser.add_argument('-m', '--minutes', type=float, default=10.0,
-                        help='外推时间 (分钟，从当前时刻起算)，默认：10 分钟')
+    parser.add_argument('-m', '--minutes', type=float, default=1.0,
+                        help='外推时间 (分钟，从当前时刻起算)，默认：1 分钟')
 
     args = parser.parse_args()
 
